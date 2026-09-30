@@ -36,7 +36,7 @@ Sort by block number, transaction index, and log index. Deduplicate by block has
 
 ## LaunchToken ABI
 
-The machine-readable ABI is [`abi/LaunchToken.json`](abi/LaunchToken.json). Regenerate it with:
+This artifact is required by the current output check, but its deployment remains unauthorized under the approved token-free release. The machine-readable ABI is [`abi/LaunchToken.json`](abi/LaunchToken.json). Regenerate it with:
 
 ```sh
 forge inspect src/LaunchToken.sol:LaunchToken abi --json > docs/abi/LaunchToken.json
