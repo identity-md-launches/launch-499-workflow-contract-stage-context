@@ -22,6 +22,13 @@ interface Vm {
 abstract contract TestBase {
     Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+    /// @dev Keep already valid boundary inputs; map other seeds into the inclusive range.
+    function bound(uint256 value, uint256 minimum, uint256 maximum) internal pure returns (uint256) {
+        require(minimum <= maximum, "invalid bounds");
+        if (value >= minimum && value <= maximum) return value;
+        return minimum + value % (maximum - minimum + 1);
+    }
+
     function assertTrue(bool condition) internal pure {
         require(condition, "assertTrue failed");
     }

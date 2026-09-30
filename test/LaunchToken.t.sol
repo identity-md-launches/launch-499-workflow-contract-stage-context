@@ -15,6 +15,7 @@ contract LaunchTokenDeploymentHarness {
     }
 }
 
+/// forge-config: default.fuzz.runs = 1000
 contract LaunchTokenTest is TestBase {
     bytes32 private constant TRANSFER = keccak256("Transfer(address,address,uint256)");
     bytes32 private constant APPROVAL = keccak256("Approval(address,address,uint256)");
@@ -181,6 +182,56 @@ contract LaunchTokenTest is TestBase {
         assertEq(token.balanceOf(address(this)), SUPPLY - 18);
         assertEq(token.balanceOf(ALICE), 7);
         assertEq(token.balanceOf(BOB), 11);
+    }
+
+    function testMaximumFiniteApprovalIsConsumedAndCanBeReplacedWithUnlimited() public {
+        token.approve(SPENDER, type(uint256).max - 1);
+        vm.prank(SPENDER);
+        assertTrue(token.transferFrom(address(this), ALICE, 1));
+        assertEq(token.allowance(address(this), SPENDER), type(uint256).max - 2);
+        token.approve(SPENDER, type(uint256).max);
+        vm.prank(SPENDER);
+        assertTrue(token.transferFrom(address(this), ALICE, 1));
+        assertEq(token.allowance(address(this), SPENDER), type(uint256).max);
+        assertEq(token.balanceOf(ALICE), 2);
+        assertEq(token.balanceOf(address(this)), SUPPLY - 2);
+    }
+
+    function testTransferFromByOwnerStillRequiresItsOwnApproval() public {
+        token.approve(SPENDER, SUPPLY);
+        _assertRejected(
+            address(this),
+            abi.encodeCall(token.transferFrom, (address(this), ALICE, 1)),
+            abi.encodeWithSelector(LaunchToken.ERC20InsufficientAllowance.selector, address(this), 0, 1)
+        );
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(ALICE), 0);
+        assertEq(token.allowance(address(this), SPENDER), SUPPLY);
+        token.approve(address(this), 1);
+        assertTrue(token.transferFrom(address(this), ALICE, 1));
+        assertEq(token.allowance(address(this), address(this)), 0);
+        assertEq(token.balanceOf(ALICE), 1);
+    }
+
+    function testFuzzFiniteBudgetCanBeExhaustedButNotExceeded(uint256 budgetSeed) public {
+        uint256 budget = bound(budgetSeed, 1, SUPPLY - 1);
+        token.approve(SPENDER, budget);
+        uint256 first = budget / 2;
+        vm.prank(SPENDER);
+        assertTrue(token.transferFrom(address(this), ALICE, first));
+        vm.prank(SPENDER);
+        assertTrue(token.transferFrom(address(this), BOB, budget - first));
+        assertEq(token.allowance(address(this), SPENDER), 0);
+        _assertRejected(
+            SPENDER,
+            abi.encodeCall(token.transferFrom, (address(this), ALICE, 1)),
+            abi.encodeWithSelector(LaunchToken.ERC20InsufficientAllowance.selector, SPENDER, 0, 1)
+        );
+        assertEq(token.balanceOf(address(this)), SUPPLY - budget);
+        assertEq(token.balanceOf(ALICE), first);
+        assertEq(token.balanceOf(BOB), budget - first);
+        assertEq(token.allowance(address(this), SPENDER), 0);
+        assertEq(token.totalSupply(), SUPPLY);
     }
 
     function testUnapprovedAndRevokedSpenderCannotTransfer() public {
