@@ -222,6 +222,114 @@ contract SignalBoardTest is TestBase {
         assertEq(board.totalActive(), 0, "unknown calls changed count");
     }
 
+    /// @dev The project floor rejects application runtime over EIP-170 or containing
+    /// DELEGATECALL, CALLCODE or SELFDESTRUCT; check the board the same way it will be checked.
+    function testRuntimeFitsEIP170AndHasNoForbiddenOpcodes() public view {
+        bytes memory runtime = address(board).code;
+        assertTrue(runtime.length > 0, "board has no runtime");
+        assertTrue(runtime.length <= 24_576, "runtime exceeds EIP-170");
+        for (uint256 i; i < runtime.length; ++i) {
+            uint8 opcode = uint8(runtime[i]);
+            if (opcode >= 0x60 && opcode <= 0x7f) {
+                i += opcode - 0x5f;
+                continue;
+            }
+            assertTrue(opcode != 0xf4, "DELEGATECALL in runtime");
+            assertTrue(opcode != 0xf2, "CALLCODE in runtime");
+            assertTrue(opcode != 0xff, "SELFDESTRUCT in runtime");
+        }
+    }
+
+    /// @dev The active count is the number of distinct wallets holding a signal, whatever
+    /// the population size: overwrites never add, clears subtract once, rewrites add back once.
+    function testFuzzManyWalletsAreCountedOnceEach(uint8 countSeed, uint8 clearSeed, bytes32 value) public {
+        uint256 count = bound(countSeed, 1, 40);
+        uint256 cleared = bound(clearSeed, 0, count);
+        value = bytes32(bound(uint256(value), 1, type(uint256).max));
+
+        for (uint256 i; i < count; ++i) {
+            _set(_wallet(i), value);
+            assertEq(board.totalActive(), i + 1, "first writes must count each wallet once");
+        }
+        for (uint256 i; i < count; ++i) {
+            _set(_wallet(i), _overwrite(value, i));
+            _assertAccount(_wallet(i), _overwrite(value, i), 2);
+        }
+        assertEq(board.totalActive(), count, "overwrites changed the active count");
+
+        for (uint256 i; i < cleared; ++i) {
+            _clear(_wallet(i));
+            assertEq(board.totalActive(), count - i - 1, "each clear removes exactly one");
+            _assertAccount(_wallet(i), bytes32(0), 3);
+        }
+        for (uint256 i = cleared; i < count; ++i) {
+            _assertAccount(_wallet(i), _overwrite(value, i), 2);
+        }
+        for (uint256 i; i < cleared; ++i) {
+            _assertRejected(_wallet(i), abi.encodeCall(board.clearSignal, ()), SignalBoard.NoSignal.selector);
+            _set(_wallet(i), value);
+            _assertAccount(_wallet(i), value, 4);
+        }
+        assertEq(board.totalActive(), count, "rewrites after clear must restore the count");
+        assertEq(board.revisionOf(_wallet(count)), 0, "an untouched wallet gained a revision");
+        assertEq(board.signalOf(_wallet(count)), bytes32(0), "an untouched wallet gained a signal");
+    }
+
+    /// @dev A random interleaving of valid sets, same-value sets, clears and rejected
+    /// zero writes/empty clears: the revision moves by exactly one on every success and
+    /// never on a failure, and the active count is exactly the wallet's presence.
+    function testFuzzRandomActionSequenceKeepsRevisionAndCountConsistent(address account, uint256 seed, bytes32 base)
+        public
+    {
+        base = bytes32(bound(uint256(base), 1, type(uint256).max));
+        if (account == BOB) account = address(uint160(account) ^ 1);
+        _set(BOB, SECOND);
+        bytes32 expectedSignal;
+        uint256 expectedRevision;
+        for (uint256 step; step < 32; ++step) {
+            uint256 action = (seed >> (step * 2)) & 3;
+            uint256 revisionBefore = board.revisionOf(account);
+            assertEq(revisionBefore, expectedRevision, "revision drifted from the successful-change count");
+            if (action == 0) {
+                bytes32 next = bytes32(uint256(base) ^ step);
+                if (next == bytes32(0)) next = base;
+                _set(account, next);
+                expectedSignal = next;
+                ++expectedRevision;
+            } else if (action == 1) {
+                if (expectedSignal == bytes32(0)) {
+                    _assertRejected(account, abi.encodeCall(board.clearSignal, ()), SignalBoard.NoSignal.selector);
+                } else {
+                    _clear(account);
+                    expectedSignal = bytes32(0);
+                    ++expectedRevision;
+                }
+            } else if (action == 2) {
+                _assertRejected(account, abi.encodeCall(board.setSignal, (bytes32(0))), SignalBoard.ZeroSignal.selector);
+            } else {
+                bytes32 repeat = expectedSignal == bytes32(0) ? base : expectedSignal;
+                _set(account, repeat);
+                expectedSignal = repeat;
+                ++expectedRevision;
+            }
+            _assertAccount(account, expectedSignal, expectedRevision);
+            assertTrue(board.revisionOf(account) >= revisionBefore, "revision decreased");
+            assertTrue(board.revisionOf(account) - revisionBefore <= 1, "revision skipped a value");
+            assertEq(board.totalActive(), expectedSignal == bytes32(0) ? 1 : 2, "count disagrees with presence");
+        }
+        _assertAccount(BOB, SECOND, 1);
+    }
+
+    function _wallet(uint256 index) private pure returns (address) {
+        return address(uint160(0x2000 + index));
+    }
+
+    /// @dev A per-wallet replacement value that is never the reserved zero.
+    function _overwrite(bytes32 value, uint256 index) private pure returns (bytes32) {
+        bytes32 next = bytes32(uint256(value) ^ (index + 1));
+        return next == bytes32(0) ? value : next;
+    }
+
     function testFuzzLifecyclePreservesArbitraryNonzeroBytes32(address account, bytes32 first, bytes32 second) public {
         first = bytes32(bound(uint256(first), 1, type(uint256).max));
         second = bytes32(bound(uint256(second), 1, type(uint256).max));

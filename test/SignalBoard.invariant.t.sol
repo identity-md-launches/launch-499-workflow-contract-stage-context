@@ -145,4 +145,20 @@ contract SignalBoardInvariantTest is TestBase {
         assertEq(board.signalOf(address(handler)), bytes32(0));
         assertEq(board.revisionOf(address(handler)), 0);
     }
+
+    /// @dev Independent of the handler's ghosts: a nonzero signal can only exist behind a
+    /// recorded change, and the active count can never exceed the accounts with history.
+    function invariant_activeAccountsHaveHistoryAndBoundTheCount() public view {
+        uint256 touched;
+        for (uint256 i; i < 4; ++i) {
+            address account = handler.actor(i);
+            uint256 revision = board.revisionOf(account);
+            if (board.signalOf(account) != bytes32(0)) {
+                assertTrue(revision >= 1, "active account without a recorded change");
+            }
+            if (revision > 0) ++touched;
+        }
+        assertTrue(board.totalActive() <= touched, "more active accounts than accounts with history");
+        assertEq(address(board).balance, 0, "board holds ETH");
+    }
 }

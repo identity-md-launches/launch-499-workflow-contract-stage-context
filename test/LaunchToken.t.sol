@@ -197,6 +197,31 @@ contract LaunchTokenTest is TestBase {
         assertEq(token.balanceOf(address(this)), SUPPLY - 2);
     }
 
+    /// @dev The unlimited branch skips the allowance check, so the balance check must catch
+    /// the maximum amount and the unconsumed allowance must survive the rejection.
+    function testUnlimitedAllowanceDoesNotBypassBalanceAtMaximumAmount() public {
+        token.approve(SPENDER, type(uint256).max);
+        _assertRejected(
+            SPENDER,
+            abi.encodeCall(token.transferFrom, (address(this), ALICE, type(uint256).max)),
+            abi.encodeWithSelector(
+                LaunchToken.ERC20InsufficientBalance.selector, address(this), SUPPLY, type(uint256).max
+            )
+        );
+        _assertRejected(
+            SPENDER,
+            abi.encodeCall(token.transferFrom, (address(this), ALICE, SUPPLY + 1)),
+            abi.encodeWithSelector(LaunchToken.ERC20InsufficientBalance.selector, address(this), SUPPLY, SUPPLY + 1)
+        );
+        assertEq(token.allowance(address(this), SPENDER), type(uint256).max);
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(ALICE), 0);
+        vm.prank(SPENDER);
+        assertTrue(token.transferFrom(address(this), ALICE, SUPPLY));
+        assertEq(token.balanceOf(ALICE), SUPPLY);
+        assertEq(token.allowance(address(this), SPENDER), type(uint256).max);
+    }
+
     function testTransferFromByOwnerStillRequiresItsOwnApproval() public {
         token.approve(SPENDER, SUPPLY);
         _assertRejected(
