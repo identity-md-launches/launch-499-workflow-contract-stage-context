@@ -124,6 +124,50 @@ contract SignalBoardInvariantTest is TestBase {
         return targets;
     }
 
+    /// @dev Witness every handler action and both clear branches without relying on random selection.
+    function testHandlerExercisesLifecycleAndEveryFailureAction() public {
+        handler.clear(0);
+        handler.set(0, bytes32(0));
+        handler.rejectZero(0);
+        handler.rejectETH(0, false);
+        handler.rejectETH(0, true);
+        invariant_signalsAndRevisionsMatchSuccessfulActions();
+        invariant_totalActiveEqualsNonzeroSignals();
+
+        handler.set(0, bytes32(uint256(1)));
+        handler.repeatValue(0);
+        handler.set(0, bytes32(type(uint256).max));
+        handler.set(1, bytes32("peer"));
+        handler.set(0, bytes32(0));
+        handler.rejectZero(0);
+        handler.rejectETH(0, false);
+        handler.rejectETH(0, true);
+        assertEq(board.signalOf(handler.actor(0)), bytes32(type(uint256).max));
+        assertEq(board.revisionOf(handler.actor(0)), 3);
+        assertEq(board.totalActive(), 2);
+        invariant_signalsAndRevisionsMatchSuccessfulActions();
+        invariant_totalActiveEqualsNonzeroSignals();
+
+        handler.clear(0);
+        handler.clear(0);
+        handler.repeatValue(0);
+        assertEq(board.revisionOf(handler.actor(0)), 5);
+        assertEq(board.totalActive(), 2);
+        invariant_signalsAndRevisionsMatchSuccessfulActions();
+        invariant_totalActiveEqualsNonzeroSignals();
+
+        handler.clear(0);
+        handler.clear(1);
+        assertEq(handler.successfulSets(), 5);
+        assertEq(handler.successfulClears(), 3);
+        assertEq(board.revisionOf(handler.actor(0)), 6);
+        assertEq(board.revisionOf(handler.actor(1)), 2);
+        assertEq(board.totalActive(), 0);
+        invariant_signalsAndRevisionsMatchSuccessfulActions();
+        invariant_totalActiveEqualsNonzeroSignals();
+        invariant_activeAccountsHaveHistoryAndBoundTheCount();
+    }
+
     function invariant_signalsAndRevisionsMatchSuccessfulActions() public view {
         uint256 revisions;
         for (uint256 i; i < 4; ++i) {

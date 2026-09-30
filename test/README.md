@@ -17,8 +17,8 @@ Foundry's handler call statistics show which actions were exercised.
 | Suite | Properties and adversarial inputs |
 | --- | --- |
 | `SignalBoard.t.sol` | Lifecycle, caller isolation, revisions, events, zero writes, empty clears, duplicate clears, nonpayable calls, constructor, EIP-170/forbidden-opcode runtime floor, up to 40 distinct wallets counted once each, and a fuzzed 32-step interleaving of successes and failures for one wallet |
-| `SignalBoard.adversarial.t.sol` | Raw bytes32 extremes, static calls, truncated calldata, atomic wallet-batch rollback, independent-call ordering |
-| `SignalBoard.invariant.t.sol` | Four actors, random sets/clears/repeated values, rejected zero/ETH calls, exact event account/value/revision, active count and successful-change accounting, and a ghost-free bound: every active account has a revision and the count never exceeds accounts with history |
+| `SignalBoard.adversarial.t.sol` | Raw bytes32 extremes, static calls, truncated calldata, appended-account spoofing, rejected owner/pause/upgrade calls from deployer and wallet, atomic wallet-batch rollback, independent-call ordering |
+| `SignalBoard.invariant.t.sol` | Four actors, random sets/clears/repeated values, rejected zero/ETH calls, exact event account/value/revision, active count and successful-change accounting, a deterministic witness for every handler action, and a ghost-free bound: every active account has a revision and the count never exceeds accounts with history |
 | `LaunchToken.t.sol` | Fixed-supply mechanics, transfer/approval events, invalid senders/receivers, allowance exhaustion, finite/infinite boundaries, unlimited allowance at the maximum amount, and atomic failure |
 | `LaunchToken.invariant.t.sol` | Four funded/unfunded actors, random transfers/approvals/delegated transfers, revocations, full-balance round trips, overspending, invalid receiver/spender and rollback |
 

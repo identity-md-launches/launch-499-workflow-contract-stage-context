@@ -74,6 +74,80 @@ contract SignalBoardAdversarialTest is TestBase {
         _assertPeer();
     }
 
+    function testAppendedAccountCannotRedirectSetOrClear() public {
+        // Keep the real selector: trailing calldata must not become an account override.
+        bytes memory clearPeer = abi.encodePacked(abi.encodeCall(board.clearSignal, ()), abi.encode(BOB));
+        vm.recordLogs();
+        vm.prank(ALICE);
+        (bool cleared, bytes memory result) = address(board).call(clearPeer);
+        assertFalse(cleared, "empty caller cleared another account");
+        assertEq(keccak256(result), keccak256(abi.encodeWithSelector(SignalBoard.NoSignal.selector)));
+        assertEq(vm.getRecordedLogs().length, 0, "rejected clear emitted a change");
+        assertEq(board.signalOf(ALICE), bytes32(0));
+        assertEq(board.revisionOf(ALICE), 0);
+        assertEq(board.totalActive(), 1);
+        _assertPeer();
+
+        vm.prank(ALICE);
+        (bool setAccepted,) =
+            address(board).call(abi.encodePacked(abi.encodeCall(board.setSignal, (bytes32("caller"))), abi.encode(BOB)));
+        assertTrue(setAccepted, "valid caller write failed");
+        assertEq(board.signalOf(ALICE), bytes32("caller"));
+        assertEq(board.revisionOf(ALICE), 1);
+        assertEq(board.totalActive(), 2);
+        _assertPeer();
+
+        vm.prank(ALICE);
+        (cleared,) = address(board).call(clearPeer);
+        assertTrue(cleared, "caller could not clear its own signal");
+        assertEq(board.signalOf(ALICE), bytes32(0));
+        assertEq(board.revisionOf(ALICE), 2);
+        assertEq(board.totalActive(), 1);
+        _assertPeer();
+    }
+
+    function testCommonAdministrativeCallsRejectFromDeployerAndWallet() public {
+        bytes[] memory payloads = new bytes[](10);
+        payloads[0] = abi.encodeWithSignature("owner()");
+        payloads[1] = abi.encodeWithSignature("admin()");
+        payloads[2] = abi.encodeWithSignature("pause()");
+        payloads[3] = abi.encodeWithSignature("unpause()");
+        payloads[4] = abi.encodeWithSignature("transferOwnership(address)", ALICE);
+        payloads[5] = abi.encodeWithSignature("initialize()");
+        payloads[6] = abi.encodeWithSignature("initialize(address)", ALICE);
+        payloads[7] = abi.encodeWithSignature("grantRole(bytes32,address)", bytes32(0), ALICE);
+        payloads[8] = abi.encodeWithSignature("upgradeTo(address)", address(board));
+        payloads[9] = abi.encodeWithSignature("upgradeToAndCall(address,bytes)", address(board), bytes(""));
+
+        vm.prank(ALICE);
+        board.setSignal(bytes32("caller"));
+        address[2] memory callers = [address(this), ALICE];
+        for (uint256 i; i < callers.length; ++i) {
+            for (uint256 j; j < payloads.length; ++j) {
+                vm.recordLogs();
+                vm.prank(callers[i]);
+                (bool accepted, bytes memory result) = address(board).call(payloads[j]);
+                assertFalse(accepted, "administrative selector accepted");
+                assertEq(result.length, 0, "administrative selector reached a function");
+                assertEq(vm.getRecordedLogs().length, 0, "administrative call emitted an event");
+                assertEq(board.signalOf(ALICE), bytes32("caller"));
+                assertEq(board.revisionOf(ALICE), 1);
+                assertEq(board.totalActive(), 2);
+                _assertPeer();
+            }
+        }
+
+        // Failed pause/upgrade attempts must leave the ordinary lifecycle usable.
+        vm.prank(ALICE);
+        board.clearSignal();
+        vm.prank(ALICE);
+        board.setSignal(bytes32("still usable"));
+        assertEq(board.signalOf(ALICE), bytes32("still usable"));
+        assertEq(board.revisionOf(ALICE), 3);
+        assertEq(board.totalActive(), 2);
+        _assertPeer();
+    }
+
     function testFuzzTruncatedSetCalldataCannotCreateOrOverwrite(uint8 lengthSeed, bool active) public {
         if (active) {
             vm.prank(ALICE);
