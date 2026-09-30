@@ -1,0 +1,22 @@
+{
+  "kind": "evm_project",
+  "token": {
+    "contract": "LaunchToken",
+    "name": "Signal Board",
+    "symbol": "SIGNAL",
+    "decimals": 18
+  },
+  "contracts": [
+    {
+      "contract": "SignalBoard",
+      "constructorArgs": []
+    }
+  ],
+  "pool": {
+    "pairedCurrency": "0x0000000000000000000000000000000000000000",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336"
+  },
+  "notes": "Describes the accepted src/LaunchToken.sol and src/SignalBoard.sol. LaunchToken has an explicit nonpayable, argument-free constructor; SignalBoard uses Solidity's implicit nonpayable, argument-free constructor. Both deploy with zero ETH. SignalBoard is the sole application contract, has no constructor dependencies or privileged roles and needs no initialization calls. The pool pairs with native ETH and has no hook; initialPrice is decimal sqrtPriceX96. Unresolved authorization finding: the approved brief forbids ERC-20 creation, minting and deployment, liquidity pools and token allocations, while the accepted LaunchToken and required evm_project launch path include a token and pool. This remains an admission and deployment blocker. Resolution requires either explicit requester authorization for token creation, minting, deployment, a liquidity pool and policy allocations, or a service-supported application-only Sepolia deployment path with corresponding checks and a replacement manifest. Independent review must verify the resolution before admission; these notes do not authorize an exception. The brief permits only the Sepolia test/demo network (chain 11155111), never mainnet. Chain selection and enforcement belong to deployment services; this manifest does not enforce the network. Policy and signed artifact linkage are service responsibilities."
+}
