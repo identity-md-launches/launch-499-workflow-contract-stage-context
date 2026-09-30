@@ -21,6 +21,7 @@ contract SignalBoardWallet {
     }
 }
 
+/// forge-config: default.fuzz.runs = 1000
 contract SignalBoardTest is TestBase {
     bytes32 private constant SIGNAL_CHANGED = keccak256("SignalChanged(address,bytes32,uint256)");
     address private constant ALICE = address(0xA11CE);
@@ -222,8 +223,8 @@ contract SignalBoardTest is TestBase {
     }
 
     function testFuzzLifecyclePreservesArbitraryNonzeroBytes32(address account, bytes32 first, bytes32 second) public {
-        vm.assume(first != bytes32(0));
-        vm.assume(second != bytes32(0));
+        first = bytes32(bound(uint256(first), 1, type(uint256).max));
+        second = bytes32(bound(uint256(second), 1, type(uint256).max));
         vm.recordLogs();
         _set(account, first);
         _assertAccount(account, first, 1);
@@ -247,8 +248,8 @@ contract SignalBoardTest is TestBase {
     function testFuzzDistinctCallersRemainIndependent(address firstAccount, address secondAccount, bytes32 value)
         public
     {
-        vm.assume(firstAccount != secondAccount);
-        vm.assume(value != bytes32(0));
+        if (firstAccount == secondAccount) secondAccount = address(uint160(secondAccount) ^ 1);
+        value = bytes32(bound(uint256(value), 1, type(uint256).max));
         _set(firstAccount, value);
         _set(secondAccount, value);
         _clear(secondAccount);
@@ -260,7 +261,7 @@ contract SignalBoardTest is TestBase {
     }
 
     function testFuzzRejectedZeroWritePreservesAnyCallersState(address account, bytes32 value, bool active) public {
-        vm.assume(value != bytes32(0));
+        value = bytes32(bound(uint256(value), 1, type(uint256).max));
         if (active) _set(account, value);
         _assertRejected(account, abi.encodeCall(board.setSignal, (bytes32(0))), SignalBoard.ZeroSignal.selector);
         _assertAccount(account, active ? value : bytes32(0), active ? 1 : 0);
