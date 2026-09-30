@@ -1,0 +1,22 @@
+{
+  "kind": "evm_project",
+  "token": {
+    "contract": "LaunchToken",
+    "name": "Signal Board",
+    "symbol": "SIGNAL",
+    "decimals": 18
+  },
+  "contracts": [
+    {
+      "contract": "SignalBoard",
+      "constructorArgs": []
+    }
+  ],
+  "pool": {
+    "pairedCurrency": "0x0000000000000000000000000000000000000000",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336"
+  },
+  "notes": "Describes the accepted src/LaunchToken.sol and src/SignalBoard.sol. Both constructors are nonpayable and argument-free. SignalBoard has no dependencies or privileged roles and needs no initialization calls. The pool pairs with native ETH and has no hook; initialPrice is decimal sqrtPriceX96. Unresolved authorization finding: the approved brief forbids ERC-20 creation, minting and deployment, liquidity pools and token allocations, while the accepted LaunchToken and required evm_project launch path include a token and pool. This conflict must be resolved through independent review and admission before deployment; these notes do not authorize an exception. The brief permits only the Sepolia test/demo network (chain 11155111), never mainnet. Chain selection and enforcement belong to deployment services; this manifest does not enforce the network. Policy and signed artifact linkage are service responsibilities."
+}
